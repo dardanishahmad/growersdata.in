@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Grower Entries - Google Sheets Backend</title>
+  <style>
+    /* ---------- Basic reset & fonts ---------- */
+    :root {
+      --accent: linear-gradient(135deg,#4f46e5,#06b6d4);
+      --card-bg: #ffffff;
+      --muted: #6b7280;
+      --shadow: 0 6px 18px rgba(15,23,42,0.08);
+      --glass: rgba(255,255,255,0.7);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin:0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(180deg,#0f172a 0%, #071029 100%);
+      color: #0f172a;
+      min-height:100vh;
+      padding:24px;
+      display:flex;
+      flex-direction:column;
+      gap:20px;
+    }
+
+    header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      color: #fff;
+    }
+    header h1 { margin:0; font-size:20px; letter-spacing:0.2px; }
+    header p { margin:0; opacity:0.8; font-size:13px; color:#cbd5e1; }
+
+    /* form */
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+      border-radius:12px;
+      padding:16px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(255,255,255,0.04);
+      color:#e6eef8;
+    }
+    form.grid {
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap:12px;
+      align-items:center;
+    }
+    label {
+      display:block;
+      font-size:12px;
+      color:#cbd5e1;
+      margin-bottom:6px;
+    }
+    input[type="text"], input[type="date"], input[type="number"], textarea, select {
+      width:100%;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+      color: #e6eef8;
+      font-size:14px;
+      outline:none;
+    }
+    textarea { min-height:44px; resize:vertical; }
+
+    .actions {
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin-top:8px;
+    }
+    button {
+      padding:8px 12px;
+      border-radius:10px;
+      border: none;
+      cursor:pointer;
+      font-weight:600;
+      font-size:14px;
+    }
+    .btn-primary {
+      background: linear-gradient(90deg,#06b6d4,#4f46e5);
+      color:white;
+      box-shadow: 0 8px 24px rgba(79,70,229,0.18);
+    }
+    .btn-ghost {
+      background:transparent;
+      color:#cbd5e1;
+      border:1px solid rgba(255,255,255,0.04);
+    }
+
+    /* cards grid */
+    .cards {
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap:16px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border-radius:14px;
+      padding:14px;
+      box-shadow: 0 10px 30px rgba(2,6,23,0.5);
+      color: #e6eef8;
+      border:1px solid rgba(255,255,255,0.04);
+      position:relative;
+      overflow:hidden;
+    }
+    .card .top {
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:12px;
+    }
+    .card h3 {
+      margin:0;
+      font-size:16px;
+      color:#fff;
+    }
+    .meta {
+      font-size:12px;
+      color:var(--muted);
+      margin-top:8px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .kv {
+      font-size:13px;
+      margin-top:10px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:space-between;
+      border-top:1px dashed rgba(255,255,255,0.03);
+      padding-top:10px;
+    }
+    .kv small { color:var(--muted); font-size:12px; }
+    .card .buttons {
+      display:flex;
+      gap:8px;
+      margin-top:10px;
+      justify-content:flex-end;
+    }
+    .chip {
+      padding:6px 8px;
+      border-radius:999px;
+      background: rgba(255,255,255,0.03);
+      font-size:12px;
+      color:#cbd5e1;
+    }
+
+    /* responsive tweaks */
+    @media (max-width:640px) {
+      body { padding:12px; }
+      header { flex-direction:column; align-items:flex-start; gap:6px; }
+      .actions { flex-direction:column; width:100%; }
+      .btn-primary, .btn-ghost { width:100%; }
+    }
+
+    /* subtle hover & focus */
+    .card:hover { transform: translateY(-6px); transition: transform 200ms ease; }
+    input:focus, textarea:focus { box-shadow: 0 6px 18px rgba(6,182,212,0.08); border-color: rgba(6,182,212,0.6); }
+
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Apple Grower Entries</h1>
+      <p>Data stored in Google Sheets — cards view, delete & print per card.</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn-ghost" id="refreshBtn">Refresh</button>
+      <button class="btn-ghost" id="clearAllBtn" title="Clears the form">Clear Form</button>
+    </div>
+  </header>
+
+  <section class="panel">
+    <form id="entryForm" class="grid" onsubmit="return false;">
+      <div>
+        <label>GR No.</label>
+        <input type="text" id="grNo" required>
+      </div>
+      <div>
+        <label>Date</label>
+        <input type="date" id="date">
+      </div>
+      <div>
+        <label>Ref. / Main Party</label>
+        <input type="text" id="refParty">
+      </div>
+      <div>
+        <label>Grower Name</label>
+        <input type="text" id="growerName">
+      </div>
+      <div>
+        <label>Phone No.</label>
+        <input type="text" id="phoneNo">
+      </div>
+      <div>
+        <label>Address</label>
+        <input type="text" id="address">
+      </div>
+      <div>
+        <label>Challan Name</label>
+        <input type="text" id="challanName">
+      </div>
+      <div>
+        <label>Challan No.</label>
+        <input type="text" id="challanNo">
+      </div>
+      <div>
+        <label>Khata</label>
+        <input type="text" id="khata">
+      </div>
+      <div>
+        <label>Apple Quantity</label>
+        <input type="number" id="appleQty" step="any">
+      </div>
+      <div>
+        <label>Driver Name</label>
+        <input type="text" id="driverName">
+      </div>
+      <div>
+        <label>Vehicle No.</label>
+        <input type="text" id="vehicleNo">
+      </div>
+      <div>
+        <label>Driver Contact</label>
+        <input type="text" id="driverContact">
+      </div>
+      <div>
+        <label>Verity</label>
+        <input type="text" id="verity">
+      </div>
+      <div>
+        <label>Store Crates</label>
+        <input type="number" id="storeCrates">
+      </div>
+      <div>
+        <label>Self Crates</label>
+        <input type="number" id="selfCrates">
+      </div>
+      <div>
+        <label>Paties</label>
+        <input type="number" id="paties">
+      </div>
+      <div>
+        <label>Total Quantity</label>
+        <input type="number" id="totalQty" step="any">
+      </div>
+
+      <div style="grid-column: 1 / -1;">
+        <div class="actions">
+          <button id="submitBtn" class="btn-primary">Save to Google Sheets</button>
+          <button id="loadBtn" class="btn-ghost">Load Records</button>
+          <div style="flex:1"></div>
+          <div class="chip" id="statusChip">Ready</div>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <h2 style="color:#e6eef8;margin:0 0 8px 0;">Records</h2>
+    <div id="cards" class="cards"></div>
+  </section>
+
+<script>
+/* ---------- CONFIG - Set your Apps Script Web App URL here ---------- */
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwuB9LdQOsZ8AgfaZI-6gkBInXWuTEUu7BUoGqHXdTNxNSy-0JAacHwDDQ9V-ycG1IE/exec'; // e.g. 'https://script.google.com/macros/s/AKfycb.../exec'
+
+if (SCRIPT_URL.includes('REPLACE_WITH')) {
+  console.warn('Please replace SCRIPT_URL with your deployed Apps Script web app URL.');
+}
+
+/* ---------- Helper: map fields between form and sheet headers ---------- */
+const FIELD_KEYS = [
+  'GR No.',
+  'Date',
+  'Ref. / Main Party',
+  'Grower Name',
+  'Phone No.',
+  'Address',
+  'Challan Name',
+  'Challan No.',
+  'Khata',
+  'Apple Quantity',
+  'Driver Name',
+  'Vechile No.',
+  'Driver Contact',
+  'Verity',
+  'Store Crates',
+  'Self Crates',
+  'Paties',
+  'Total Quantity'
+];
+
+function getFormValues() {
+  return {
+    'GR No.': document.getElementById('grNo').value.trim(),
+    'Date': document.getElementById('date').value,
+    'Ref. / Main Party': document.getElementById('refParty').value.trim(),
+    'Grower Name': document.getElementById('growerName').value.trim(),
+    'Phone No.': document.getElementById('phoneNo').value.trim(),
+    'Address': document.getElementById('address').value.trim(),
+    'Challan Name': document.getElementById('challanName').value.trim(),
+    'Challan No.': document.getElementById('challanNo').value.trim(),
+    'Khata': document.getElementById('khata').value.trim(),
+    'Apple Quantity': document.getElementById('appleQty').value,
+    'Driver Name': document.getElementById('driverName').value.trim(),
+    'Vechile No.': document.getElementById('vehicleNo').value.trim(),
+    'Driver Contact': document.getElementById('driverContact').value.trim(),
+    'Verity': document.getElementById('verity').value.trim(),
+    'Store Crates': document.getElementById('storeCrates').value,
+    'Self Crates': document.getElementById('selfCrates').value,
+    'Paties': document.getElementById('paties').value,
+    'Total Quantity': document.getElementById('totalQty').value
+  };
+}
+
+function setStatus(msg, timeout=3000) {
+  const chip = document.getElementById('statusChip');
+  chip.textContent = msg;
+  if (timeout) {
+    setTimeout(()=>{ chip.textContent = 'Ready'; }, timeout);
+  }
+}
+
+/* ---------- Fetch list ---------- */
+async function loadRecords() {
+  setStatus('Loading...');
+  try {
+    const resp = await fetch(SCRIPT_URL + '?action=list');
+    const json = await resp.json();
+    if (!json.success) {
+      setStatus('Error loading');
+      console.error(json);
+      return;
+    }
+    renderCards(json.records || []);
+    setStatus('Loaded', 1500);
+  } catch (err) {
+    console.error(err);
+    setStatus('Network error');
+  }
+}
+
+/* ---------- Create record ---------- */
+async function createRecord(dataObj) {
+  setStatus('Saving...');
+  try {
+    const body = { action:'create', ...dataObj };
+    const resp = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const json = await resp.json();
+    if (json.success) {
+      setStatus('Saved', 1200);
+      await loadRecords();
+      clearForm();
+    } else {
+      console.error(json);
+      setStatus('Save failed');
+    }
+  } catch (err) {
+    console.error(err);
+    setStatus('Network error');
+  }
+}
+
+/* ---------- Delete record by ID ---------- */
+async function deleteRecord(id) {
+  if (!confirm('Delete this record permanently?')) return;
+  setStatus('Deleting...');
+  try {
+    const resp = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action:'delete', id: id })
+    });
+    const json = await resp.json();
+    if (json.success) {
+      setStatus('Deleted', 1200);
+      await loadRecords();
+    } else {
+      console.error(json);
+      setStatus('Delete failed');
+      alert('Delete failed: ' + (json.message || 'unknown'));
+    }
+  } catch (err) {
+    console.error(err);
+    setStatus('Network error');
+  }
+}
+
+/* ---------- Render cards ---------- */
+function renderCards(records) {
+  const container = document.getElementById('cards');
+  container.innerHTML = '';
+  if (!records || records.length === 0) {
+    container.innerHTML = '<div style="color:#cbd5e1;padding:12px;background:rgba(255,255,255,0.02);border-radius:8px">No records yet.</div>';
+    return;
+  }
+
+  records.reverse(); // show newest first
+  records.forEach(record => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    // header
+    const top = document.createElement('div');
+    top.className = 'top';
+    const h = document.createElement('h3');
+    h.textContent = `${record['Grower Name'] || '—'} (${record['GR No.'] || 'no GR'})`;
+    top.appendChild(h);
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = record['Date'] || '';
+    top.appendChild(chip);
+    card.appendChild(top);
+
+    // meta
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.innerHTML = `
+      <div><strong>Phone:</strong> ${escapeHtml(record['Phone No.'] || '')}</div>
+      <div><strong>Vehicle:</strong> ${escapeHtml(record['Vechile No.'] || '')}</div>
+      <div><strong>Driver:</strong> ${escapeHtml(record['Driver Name'] || '')}</div>
+    `;
+    card.appendChild(meta);
+
+    // detail rows
+    FIELD_KEYS.forEach(k => {
+      if (k === 'Grower Name' || k === 'GR No.' || k === 'Date') return; // already shown
+      const kv = document.createElement('div');
+      kv.className = 'kv';
+      const label = document.createElement('div');
+      label.innerHTML = `<small>${k}</small>`;
+      const val = document.createElement('div');
+      val.innerHTML = `<strong>${escapeHtml(record[k] || '')}</strong>`;
+      kv.appendChild(label);
+      kv.appendChild(val);
+      card.appendChild(kv);
+    });
+
+    // action buttons
+    const buttons = document.createElement('div');
+    buttons.className = 'buttons';
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-ghost';
+    delBtn.textContent = 'Delete';
+    delBtn.onclick = () => deleteRecord(record['ID']);
+    const printBtn = document.createElement('button');
+    printBtn.className = 'btn-primary';
+    printBtn.textContent = 'Print';
+    printBtn.onclick = () => printCard(card);
+    buttons.appendChild(delBtn);
+    buttons.appendChild(printBtn);
+    card.appendChild(buttons);
+
+    container.appendChild(card);
+  });
+}
+
+/* ---------- Print single card ---------- */
+function printCard(cardElement) {
+  // Create a print window with the card HTML and minimal styles
+  const html = `
+    <html>
+      <head>
+        <title>Print Record</title>
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <style>
+          body { font-family: Inter, Arial, sans-serif; padding:20px; background:white; color:#111; }
+          .card { border-radius:8px; padding:12px; border: 1px solid #ddd; max-width:800px; margin:0 auto; }
+          .card h3 { margin:0 0 8px 0; }
+          .kv { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #eee; }
+        </style>
+      </head>
+      <body>
+        <div class="card">${cardElement.innerHTML}</div>
+      </body>
+    </html>
+  `;
+  const w = window.open('', '_blank', 'width=800,height=600');
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  // wait a little for styles to load then print
+  w.focus();
+  setTimeout(()=> { w.print(); /* w.close(); optionally close */ }, 300);
+}
+
+/* ---------- Utility ---------- */
+function escapeHtml(text) {
+  if (!text && text !== 0) return '';
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/* ---------- Form handlers ---------- */
+document.getElementById('submitBtn').addEventListener('click', async (e) => {
+  e.preventDefault();
+  const values = getFormValues();
+  if (!values['GR No.']) {
+    alert('Please provide GR No.');
+    return;
+  }
+  await createRecord(values);
+});
+
+document.getElementById('loadBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  loadRecords();
+});
+
+document.getElementById('refreshBtn').addEventListener('click', () => loadRecords());
+document.getElementById('clearAllBtn').addEventListener('click', clearForm);
+
+function clearForm() {
+  document.getElementById('entryForm').reset();
+  setStatus('Form cleared', 1200);
+}
+
+/* ---------- initial load ---------- */
+loadRecords();
+
+</script>
+</body>
+</html>
